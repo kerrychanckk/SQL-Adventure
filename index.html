@@ -1,0 +1,640 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Minecraft SQL Adventure</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=VT323&display=swap');
+
+        :root {
+            --mc-green: #588131;
+            --mc-dirt: #8b5e3c;
+            --mc-stone: #757575;
+            --mc-light: #e0e0e0;
+            --mc-dark: #1a1a1a;
+            --mc-btn-shadow: #3a3a3a;
+        }
+
+        body {
+            font-family: 'VT323', monospace;
+            background-color: #2c2c2c;
+            background-image: repeating-linear-gradient(45deg, #2c2c2c 25%, #333 25%, #333 50%, #2c2c2c 50%, #2c2c2c 75%, #333 75%, #333 100%);
+            background-size: 20px 20px;
+            color: var(--mc-light);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        h1 {
+            color: #55ff55;
+            text-shadow: 2px 2px #000;
+            font-size: 3rem;
+            margin-bottom: 10px;
+            text-align: center;
+        }
+
+        .game-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            max-width: 1200px;
+            width: 100%;
+            justify-content: center;
+        }
+
+        /* Left Panel: Game Logic */
+        .panel-left {
+            flex: 2;
+            min-width: 300px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        /* Right Panel: Data Reference */
+        .panel-right {
+            flex: 1;
+            min-width: 300px;
+            background: rgba(0, 0, 0, 0.5);
+            border: 4px solid var(--mc-stone);
+            padding: 10px;
+            height: fit-content;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+
+        .mission-box {
+            background-color: var(--mc-dirt);
+            border: 4px solid #000;
+            padding: 20px;
+            box-shadow: 4px 4px 0px rgba(0,0,0,0.5);
+            position: relative;
+        }
+
+        .level-badge {
+            position: absolute;
+            top: -15px;
+            right: -10px;
+            background: #ffaa00;
+            color: #000;
+            padding: 5px 10px;
+            border: 2px solid #fff;
+            font-size: 1.2rem;
+            transform: rotate(5deg);
+        }
+
+        .code-editor {
+            background-color: #1e1e1e;
+            border: 4px solid #555;
+            padding: 10px;
+            font-family: 'Consolas', 'Courier New', monospace;
+            font-size: 1.2rem;
+            color: #fff;
+            width: 95%;
+            height: 100px;
+            resize: vertical;
+        }
+
+        .controls {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+        }
+
+        button {
+            font-family: 'VT323', monospace;
+            font-size: 1.5rem;
+            padding: 5px 20px;
+            border: 2px solid #000;
+            cursor: pointer;
+            text-transform: uppercase;
+            box-shadow: 0 4px 0 var(--mc-btn-shadow);
+            transition: transform 0.1s;
+        }
+
+        button:active {
+            transform: translateY(4px);
+            box-shadow: 0 0 0 var(--mc-btn-shadow);
+        }
+
+        .btn-run { background-color: var(--mc-green); color: white; }
+        .btn-reset { background-color: #aa0000; color: white; }
+        .btn-hint { background-color: #ffaa00; color: black; }
+
+        .output-area {
+            background: #000;
+            border: 2px solid var(--mc-stone);
+            min-height: 150px;
+            padding: 10px;
+            font-family: 'Consolas', monospace;
+            white-space: pre-wrap;
+            overflow-x: auto;
+        }
+
+        .feedback {
+            margin-top: 10px;
+            padding: 10px;
+            border-radius: 4px;
+            display: none;
+            font-size: 1.3rem;
+        }
+        .success { background: #00aa00; color: white; border: 2px solid #55ff55; }
+        .error { background: #aa0000; color: white; border: 2px solid #ff5555; }
+
+        /* Table Styling */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 1rem;
+            background: #333;
+        }
+        th, td {
+            border: 1px solid #555;
+            padding: 5px;
+            text-align: left;
+        }
+        th {
+            background: #444;
+            color: #55ff55;
+        }
+        tr:nth-child(even) { background: #3a3a3a; }
+
+        .db-header {
+            text-align: center;
+            border-bottom: 2px solid #777;
+            margin-bottom: 10px;
+            padding-bottom: 5px;
+        }
+
+        /* Celebration Animation */
+        .confetti {
+            position: absolute;
+            width: 10px;
+            height: 10px;
+            background-color: #f00;
+            animation: fall 3s linear forwards;
+            z-index: 999;
+            box-shadow: 2px 2px 0 #000;
+        }
+
+        @keyframes fall {
+            0% { transform: translateY(-10vh) rotate(0deg); opacity: 1; }
+            100% { transform: translateY(110vh) rotate(720deg); opacity: 0; }
+        }
+    </style>
+</head>
+<body>
+
+    <h1>MINECRAFT SQL ADVENTURE</h1>
+
+    <!-- Celebration Container -->
+    <div id="celebration-container" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; overflow: hidden; display: none; z-index: 1000;"></div>
+
+    <div class="game-container">
+        
+        <!-- Game Area -->
+        <div class="panel-left">
+            <div class="mission-box">
+                <div class="level-badge" id="levelBadge">Level 1</div>
+                <h2 style="margin-top:0">Objective:</h2>
+                <p id="missionText" style="font-size: 1.4rem; line-height: 1.4;">Loading...</p>
+                <textarea id="sqlInput" class="code-editor" spellcheck="false" placeholder="Type your SQL query here..."></textarea>
+                
+                <div class="controls">
+                    <button class="btn-run" onclick="runQuery()">Run Code</button>
+                    <button class="btn-hint" onclick="showHint()">Hint</button>
+                    <button class="btn-reset" onclick="resetProgress()">Reset Game</button>
+                </div>
+                
+                <div id="feedbackBox" class="feedback"></div>
+            </div>
+
+            <div class="output-area">
+                <div style="color: #777; margin-bottom: 5px;">> Query Result:</div>
+                <div id="resultTable"></div>
+            </div>
+        </div>
+
+        <!-- Database View -->
+        <div class="panel-right">
+            <div class="db-header">
+                <h3>TABLE: <span style="color:#55ff55">minecraft</span></h3>
+            </div>
+            <div id="fullDbTable"></div>
+        </div>
+    </div>
+
+<script>
+    // --- 1. THE DATA ---
+    const dbData = [
+        { id: 1, name: 'Steve', category: 'Character', rarity: 'Common', damage: 4, health: 20 },
+        { id: 2, name: 'Creeper', category: 'Mob', rarity: 'Common', damage: 20, health: 20 },
+        { id: 3, name: 'Diamond Sword', category: 'Tool', rarity: 'Rare', damage: 7, health: 1561 },
+        { id: 4, name: 'Dirt Block', category: 'Block', rarity: 'Common', damage: 0, health: 0 },
+        { id: 5, name: 'Ender Dragon', category: 'Mob', rarity: 'Epic', damage: 10, health: 200 },
+        { id: 6, name: 'Golden Apple', category: 'Food', rarity: 'Rare', damage: 0, health: 0 },
+        { id: 7, name: 'Zombie', category: 'Mob', rarity: 'Common', damage: 3, health: 20 },
+        { id: 8, name: 'Diamond Ore', category: 'Block', rarity: 'Rare', damage: 0, health: 0 },
+        { id: 9, name: 'Iron Pickaxe', category: 'Tool', rarity: 'Common', damage: 4, health: 250 },
+        { id: 10, name: 'Skeleton', category: 'Mob', rarity: 'Common', damage: 4, health: 20 },
+        { id: 11, name: 'Dragon Egg', category: 'Block', rarity: 'Epic', damage: 0, health: 0 },
+        { id: 12, name: 'Bread', category: 'Food', rarity: 'Common', damage: 0, health: 0 }
+    ];
+
+    // --- 2. THE LEVELS ---
+    const levels = [
+        {
+            id: 1,
+            title: "The Basics (SELECT)",
+            instruction: "Welcome! We are accessing the <code>minecraft</code> table. <br>Mission: List all the <b>name</b>s of the items.",
+            check: (res) => res.length === 12 && res[0].hasOwnProperty('name') && Object.keys(res[0]).length === 1,
+            hint: "Try: SELECT name FROM minecraft"
+        },
+        {
+            id: 2,
+            title: "Unique Types (DISTINCT)",
+            instruction: "There are many items, but what *types* exist? We don't want duplicates.<br>Mission: Find the distinct <b>category</b> types.",
+            check: (res) => res.length === 5 && res.some(r => r.category === 'Mob'),
+            hint: "Try: SELECT DISTINCT category FROM minecraft"
+        },
+        {
+            id: 3,
+            title: "Filtering (WHERE)",
+            instruction: "We need to find powerful items. <br>Mission: Select all columns (<b>*</b>) for items where the <b>rarity</b> is 'Epic'.",
+            check: (res) => res.length === 2 && res[0].rarity === 'Epic',
+            hint: "Try: SELECT * FROM minecraft WHERE rarity = 'Epic'"
+        },
+        {
+            id: 4,
+            title: "Complex Logic (AND)",
+            instruction: "Let's find something dangerous but common. <br>Mission: Find items where <b>category</b> is 'Mob' <b>AND</b> <b>rarity</b> is 'Common'.",
+            check: (res) => res.length === 3 && res[0].category === 'Mob' && res[0].rarity === 'Common',
+            hint: "Try: SELECT * FROM minecraft WHERE category = 'Mob' AND rarity = 'Common'"
+        },
+        {
+            id: 5,
+            title: "Order Ascending (ASC)",
+            instruction: "Organization is key. <br>Mission: Select <b>name</b> and <b>rarity</b>, ordered by <b>name</b> in ascending (ASC) order (A-Z).",
+            check: (res) => res.length === 12 && res[0].name === 'Bread' && res[11].name === 'Zombie',
+            hint: "Try: SELECT name, rarity FROM minecraft ORDER BY name ASC"
+        },
+        {
+            id: 6,
+            title: "Order Descending (DESC)",
+            instruction: "Now we need the strongest weapons first! <br>Mission: Select <b>name</b> and <b>damage</b>, ordered by <b>damage</b> in descending (DESC) order (High to Low).",
+            check: (res) => res[0].damage === 20 && res[1].damage === 10,
+            hint: "Try: SELECT name, damage FROM minecraft ORDER BY damage DESC"
+        },
+        {
+            id: 7,
+            title: "Counting (COUNT)",
+            instruction: "How many items do we have in total? <br>Mission: <b>COUNT</b> all the rows (*).",
+            check: (res) => { 
+                const val = Object.values(res[0])[0];
+                return val == 12;
+            },
+            hint: "Try: SELECT COUNT(*) FROM minecraft"
+        },
+        {
+            id: 8,
+            title: "Group Sum (SUM)",
+            instruction: "Let's calculate stats per category. <br>Mission: Select <b>category</b> and the <b>SUM</b> of <b>damage</b>, grouped by <b>category</b>.",
+            check: (res) => {
+                const mobRow = res.find(r => r.category === 'Mob');
+                return mobRow && mobRow['SUM(damage)'] == 37; // 20+10+3+4
+            },
+            hint: "Try: SELECT category, SUM(damage) FROM minecraft GROUP BY category"
+        },
+        {
+            id: 9,
+            title: "Group Max (MAX)",
+            instruction: "What is the highest health item in each category? <br>Mission: Select <b>category</b> and <b>MAX(health)</b>, grouped by <b>category</b>.",
+            check: (res) => {
+                const toolRow = res.find(r => r.category === 'Tool');
+                return toolRow && toolRow['MAX(health)'] == 1561;
+            },
+            hint: "Try: SELECT category, MAX(health) FROM minecraft GROUP BY category"
+        },
+        {
+            id: 10,
+            title: "Group Average (AVG)",
+            instruction: "How rare are the items? <br>Mission: Select <b>rarity</b> and the <b>AVG(damage)</b>, grouped by <b>rarity</b>.",
+            check: (res) => {
+                const epicRow = res.find(r => r.rarity === 'Epic');
+                // Epic: Dragon(10), Egg(0) -> Avg 5
+                return epicRow && epicRow['AVG(damage)'] == 5;
+            },
+            hint: "Try: SELECT rarity, AVG(damage) FROM minecraft GROUP BY rarity"
+        }
+    ];
+
+    let currentLevelIndex = 0;
+
+    // --- 3. INIT ---
+    window.onload = function() {
+        renderTable(dbData, 'fullDbTable');
+        loadProgress();
+        loadLevel();
+    };
+
+    function loadLevel() {
+        if (currentLevelIndex >= levels.length) {
+            document.getElementById('missionText').innerHTML = "<b>CONGRATULATIONS!</b><br>You have mastered SQL and completed the adventure!<br>You can reset to play again.";
+            document.getElementById('levelBadge').innerText = "MAX";
+            document.getElementById('sqlInput').disabled = true;
+            startCelebration(); 
+            return;
+        }
+        const lvl = levels[currentLevelIndex];
+        document.getElementById('levelBadge').innerText = "Level " + lvl.id;
+        document.getElementById('missionText').innerHTML = lvl.instruction;
+        document.getElementById('sqlInput').value = "";
+        document.getElementById('feedbackBox').style.display = 'none';
+        document.getElementById('resultTable').innerHTML = "";
+    }
+
+    function showHint() {
+        const lvl = levels[currentLevelIndex];
+        const feedback = document.getElementById('feedbackBox');
+        feedback.className = "feedback"; 
+        feedback.style.background = "#ffffaa";
+        feedback.style.color = "black";
+        feedback.innerText = "HINT: " + lvl.hint;
+        feedback.style.display = "block";
+    }
+
+    // --- CELEBRATION LOGIC ---
+    function startCelebration() {
+        const container = document.getElementById('celebration-container');
+        container.style.display = 'block';
+        
+        for (let i = 0; i < 150; i++) {
+            const confetti = document.createElement('div');
+            confetti.classList.add('confetti');
+            confetti.style.left = Math.random() * 100 + 'vw';
+            confetti.style.backgroundColor = ['#ff0000', '#00ff00', '#0000ff', '#ffff00', '#00ffff', '#ff00ff', '#ffffff'][Math.floor(Math.random() * 7)];
+            confetti.style.animationDuration = (Math.random() * 2 + 2) + 's'; 
+            confetti.style.width = (Math.random() * 12 + 6) + 'px';
+            confetti.style.height = confetti.style.width;
+            container.appendChild(confetti);
+        }
+        setTimeout(() => {
+            container.innerHTML = '';
+            container.style.display = 'none';
+        }, 5000);
+    }
+
+    // --- 4. SQL ENGINE ---
+    function runQuery() {
+        const rawSql = document.getElementById('sqlInput').value.trim();
+        const sql = rawSql.replace(/\s+/g, ' ').trim(); 
+        const feedback = document.getElementById('feedbackBox');
+        const lvl = levels[currentLevelIndex];
+
+        try {
+            let resultData = [...dbData]; 
+            
+            // Basic Parsing
+            const selectMatch = sql.match(/SELECT\s+(.+?)\s+FROM/i);
+            if (!selectMatch) throw new Error("Missing SELECT statement");
+            let columns = selectMatch[1].split(',').map(s => s.trim());
+
+            // 1. WHERE
+            const whereMatch = sql.match(/WHERE\s+(.+?)(?:\s+ORDER\s+BY|\s+GROUP\s+BY|$)/i);
+            if (whereMatch) {
+                const condition = whereMatch[1];
+                resultData = resultData.filter(row => evaluateCondition(row, condition));
+            }
+
+            // 2. GROUP BY
+            const groupMatch = sql.match(/GROUP\s+BY\s+(.+?)(?:\s+ORDER\s+BY|$)/i);
+            let groups = {};
+
+            if (groupMatch) {
+                const groupCol = groupMatch[1].trim();
+                resultData.forEach(row => {
+                    const key = row[groupCol];
+                    if (!groups[key]) groups[key] = [];
+                    groups[key].push(row);
+                });
+            } else {
+                // If no group by, but we have aggregate functions later, we treat as one group
+                groups['all'] = resultData;
+            }
+
+            // 3. PROJECTION & AGGREGATION
+            const hasAggregate = columns.some(c => /COUNT|MAX|MIN|AVG|SUM/i.test(c));
+            const distinct = columns[0].toUpperCase().startsWith('DISTINCT');
+            if (distinct) {
+                 columns[0] = columns[0].replace(/DISTINCT\s+/i, '');
+            }
+
+            if (hasAggregate) {
+                // Calculate aggregates per group
+                let aggResults = [];
+                // If groupMatch exists, iterate keys. If not, just iterate 'all'
+                const keys = groupMatch ? Object.keys(groups) : ['all'];
+
+                keys.forEach(key => {
+                    let rows = groups[key];
+                    let rowObj = {};
+                    columns.forEach(col => {
+                        const upper = col.toUpperCase();
+                        if (upper.includes('COUNT')) {
+                            rowObj[col] = rows.length;
+                        } else if (upper.includes('SUM')) {
+                            const field = col.match(/\((.+?)\)/)[1];
+                            rowObj[col] = rows.reduce((acc, r) => acc + (r[field]||0), 0);
+                        } else if (upper.includes('AVG')) {
+                            const field = col.match(/\((.+?)\)/)[1];
+                            const sum = rows.reduce((acc, r) => acc + (r[field]||0), 0);
+                            rowObj[col] = parseFloat((sum / rows.length).toFixed(1)); // 1 decimal for clean display
+                        } else if (upper.includes('MAX')) {
+                            const field = col.match(/\((.+?)\)/)[1];
+                            rowObj[col] = Math.max(...rows.map(r => r[field]));
+                        } else if (upper.includes('MIN')) {
+                            const field = col.match(/\((.+?)\)/)[1];
+                            rowObj[col] = Math.min(...rows.map(r => r[field]));
+                        } else {
+                            // Non-aggregate column logic
+                            if (groupMatch && col === groupMatch[1].trim()) {
+                                rowObj[col] = key;
+                            } else {
+                                // Just pick first one if implied
+                                rowObj[col] = rows[0][col]; 
+                            }
+                        }
+                    });
+                    aggResults.push(rowObj);
+                });
+                resultData = aggResults;
+
+            } else {
+                // No aggregates - Logic for simple Select
+                if (groupMatch) {
+                    // GROUP BY without aggregates usually acts like DISTINCT on the group column
+                    // or returns one arbitrary row per group for other columns (MySQL behavior)
+                    let simpleGrouped = [];
+                    Object.keys(groups).forEach(key => {
+                        let rows = groups[key];
+                        let rowObj = {};
+                        columns.forEach(col => {
+                            if (col === groupMatch[1].trim()) rowObj[col] = key;
+                            else rowObj[col] = rows[0][col];
+                        });
+                        simpleGrouped.push(rowObj);
+                    });
+                    resultData = simpleGrouped;
+                } else {
+                    // Standard Select
+                    if (columns[0] !== '*') {
+                        resultData = resultData.map(row => {
+                            let newRow = {};
+                            columns.forEach(col => {
+                                if (row.hasOwnProperty(col)) newRow[col] = row[col];
+                            });
+                            return newRow;
+                        });
+                    }
+                    if (distinct) {
+                        const unique = new Set();
+                        resultData = resultData.filter(row => {
+                            const str = JSON.stringify(row);
+                            if (unique.has(str)) return false;
+                            unique.add(str);
+                            return true;
+                        });
+                    }
+                }
+            }
+
+            // 4. ORDER BY
+            const orderMatch = sql.match(/ORDER\s+BY\s+(.+?)(\s+ASC|\s+DESC|$)/i);
+            if (orderMatch) {
+                const orderCol = orderMatch[1].trim();
+                const direction = (orderMatch[2] || '').trim().toUpperCase();
+                resultData.sort((a, b) => {
+                    let valA = a[orderCol];
+                    let valB = b[orderCol];
+                    
+                    if (typeof valA === 'string') valA = valA.toLowerCase();
+                    if (typeof valB === 'string') valB = valB.toLowerCase();
+
+                    if (valA < valB) return direction === 'DESC' ? 1 : -1;
+                    if (valA > valB) return direction === 'DESC' ? -1 : 1;
+                    return 0;
+                });
+            }
+
+            renderTable(resultData, 'resultTable');
+
+            // --- CHECK WIN CONDITION ---
+            if (lvl.check(resultData)) {
+                feedback.className = "feedback success";
+                feedback.style.display = "block";
+                feedback.innerHTML = "Success! <button onclick='nextLevel()'>Next Level >></button>";
+            } else {
+                feedback.className = "feedback error";
+                feedback.style.display = "block";
+                feedback.innerText = "Query ran, but the result isn't what we needed.";
+            }
+
+        } catch (e) {
+            feedback.className = "feedback error";
+            feedback.style.display = "block";
+            feedback.innerText = "Error: " + e.message;
+            document.getElementById('resultTable').innerHTML = "";
+            console.error(e);
+        }
+    }
+
+    // --- UTILS ---
+    function evaluateCondition(row, conditionStr) {
+        const parts = conditionStr.split(/\s+AND\s+/i);
+        if (parts.length > 1) {
+            return parts.every(part => checkSimple(row, part));
+        }
+        return checkSimple(row, conditionStr);
+    }
+
+    function checkSimple(row, cond) {
+        cond = cond.trim();
+        let operator = '';
+        if (cond.includes('=')) operator = '=';
+        else if (cond.includes('>')) operator = '>';
+        else if (cond.includes('<')) operator = '<';
+        
+        if (!operator) return false;
+
+        const parts = cond.split(operator);
+        let keyRaw = parts[0].trim();
+        let valRaw = parts[1].trim().replace(/^'|'$/g, ''); 
+
+        const actualKey = Object.keys(row).find(k => k.toLowerCase() === keyRaw.toLowerCase());
+        if (!actualKey) return false; 
+
+        let val = valRaw;
+        if (!isNaN(val) && val !== '') val = Number(val);
+
+        const rowVal = row[actualKey];
+        if (operator === '=') {
+            if (typeof rowVal === 'string' && typeof val === 'string') {
+                return rowVal.toLowerCase() === val.toLowerCase();
+            }
+            return rowVal == val;
+        }
+        if (operator === '>') return rowVal > val;
+        if (operator === '<') return rowVal < val;
+
+        return false;
+    }
+
+    function renderTable(data, containerId) {
+        if (!data || data.length === 0) {
+            document.getElementById(containerId).innerHTML = "<i>No results found.</i>";
+            return;
+        }
+        const cols = Object.keys(data[0]);
+        let html = '<table><thead><tr>';
+        cols.forEach(c => html += `<th>${c}</th>`);
+        html += '</tr></thead><tbody>';
+        data.forEach(row => {
+            html += '<tr>';
+            cols.forEach(c => html += `<td>${row[c]}</td>`);
+            html += '</tr>';
+        });
+        html += '</tbody></table>';
+        document.getElementById(containerId).innerHTML = html;
+    }
+
+    function nextLevel() {
+        currentLevelIndex++;
+        saveProgress();
+        loadLevel();
+    }
+
+    function saveProgress() {
+        localStorage.setItem('sqlGameLevel', currentLevelIndex);
+    }
+
+    function loadProgress() {
+        const saved = localStorage.getItem('sqlGameLevel');
+        if (saved) currentLevelIndex = parseInt(saved);
+    }
+
+    function resetProgress() {
+        if(confirm("Restart game?")) {
+            currentLevelIndex = 0;
+            saveProgress();
+            loadLevel();
+        }
+    }
+
+</script>
+</body>
+</html>
